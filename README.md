@@ -9,11 +9,9 @@ Daily Updates：Recording of project progress
 # ✔已完成
 ### 模块1：任务准备
 
-**目标**：基于`micromamba`配置环境，熟悉工具和资源。（包括新建R4.4.1的环境，并安装以下工具）
-
 **完成**：
 
-安装并熟悉以下工具：
+基于`micromamba`配置环境，安装并熟悉以下工具：
 
 1. fastqc、multiqc、fastp：质控与清洗
 
