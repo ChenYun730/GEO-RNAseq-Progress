@@ -28,8 +28,9 @@ Daily Updates：Recording of project progress
 1. 如何在没有管理员权限下安装fastqc？
 
    答：有多种方法，包括micromamba、手动下载二进制文件以及在Java环境下通过源码编译等方式。这里使用micromamba、bioconda（或镜像）：
-
-   `micromamba create -p ~/micromamba_envs/fastqc_env -c bioconda -c conda-forge fastqc`
+```
+   micromamba create -p ~/micromamba_envs/fastqc_env -c bioconda -c conda-forge fastqc
+```
 
 2. GitHub的README文件有什么作用？
    
