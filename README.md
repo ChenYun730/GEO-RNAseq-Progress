@@ -7,7 +7,7 @@ Daily Updates：Recording of project progress
 **任务要求**： 分析SARS-CoV-2以1 MOI感染Calu-3/2B4细胞系12h后，转录组水平的变化。
 
 # ✔已完成
-### 模块1：任务准备
+## 模块1：任务准备
 
 **实用操作**
 
@@ -55,15 +55,14 @@ mv（英文全拼：move file）: 移动文件与目录，或修改文件与目�
    
    项目的“门面”和“使用说明书”，像这样👀。
 
-# 🤷‍♀️未完成
 
-### 模块2：数据下载与预处理
+## 模块2：数据下载与预处理
 
 **目标**：从GEO下载原始数据，进行质控和清洗。
 
-**任务**：
+### 任务：
 
-1. 使用wget、curl或aspera下载指定GEO编号的FASTQ数据(以SRR27961778为例）
+**1. 使用wget、curl或aspera下载指定GEO编号的FASTQ数据(以SRR27961778为例）**
 ```
 #下载SRA文件
     wget -O SRR27961778.sra \"https://sra-pub-run-odp.s3.amazonaws.com/sra/SRR27961778/SRR27961778"
@@ -73,7 +72,7 @@ mv（英文全拼：move file）: 移动文件与目录，或修改文件与目�
    gzip SRR27961779_1.fastq
 ```
 
-2. 质控：fastqc和multiq
+**2. 质控：fastqc和multiq**
 ```
 #生成原始数据质控报告
    fastqc SRR27961778_1.fastq.gz SRR27961778_2.fastq.gz -o ./raw_fastqc_results 
@@ -81,7 +80,7 @@ mv（英文全拼：move file）: 移动文件与目录，或修改文件与目�
    multiqc ./SRR*
 ```
 
-3. 清洗：fastp（去低质、去接头）
+**3. 清洗：fastp（去低质、去接头）**
 ```
 #先在test里新建一个文件夹clean——data用于存储清洗后的数据
 $ cd /mnt/alamo01/users/chenyun730/program/test
@@ -98,8 +97,14 @@ $ for F in /mnt/alamo01/users/chenyun730/program/test/raw_data/*_1.fastq.gz; do
    -h /mnt/alamo01/users/chenyun730/program/test/clean_data/${SAMPLE}_report.html
    -j /mnt/alamo01/users/chenyun730/program/test/clean_data/${SAMPLE}_report.json &
 done
+#e ——平均质量阈值； q ——质量阈值（默认为15，这里提高到30为更严格）；
+u ——允许达标碱基的比例为10%； r ——启用 polyG 修剪（适用于 NovaSeq）；
+M ——polyG 的最小长度阈值；
+W 5 ——滑动窗口大小（5bp）； w 64 ——使用64个线程；
+f 10 F 10 ——切除 Read 1/2 前 10 bp
 ```
-6. 输出：质控报告、清洗后数据
+
+**4. 输出：质控报告、清洗后数据**
 ```
 multiqc ./ -n "Cleaned_Data_QC"
 ```
@@ -107,3 +112,33 @@ multiqc ./ -n "Cleaned_Data_QC"
 **思考题**：
 
 如果质控报告中碱基质量偏低，如何调整fastp的参数？
+ 
+1.全局调整： 提高质量阈值q、降低允许未达标碱基的比例u、提高平均质量阈值e；
+   
+2.若5' 或 3' 端质量差，序列开头或末尾质量明显下降：提高首位切除的bp数（-f、-F、-t）；
+   
+3.若接头序列残留（MultiQC 的 Adapter Content 部分显示超标）：自动检测接头（即使已指定序列）或者额外切除5bp（-trim_front1 5);
+   
+4.若高比例的重复序列或低复杂度序列：过滤掉长度< 50bp 的 reads（默认 15）-l 50；移除低复杂度序列-low_complexity_filter；
+   
+5.若局部区域质量波动大：减小滑动窗口大小-W；滑动窗口平均质量阈值从 30 降至 25（更宽松）-M
+   
+# 🤷‍♀️未完成   
+
+## 模块3：比对与定量
+
+**目标**：基于参考基因组构建索引并进行比对与定量。
+
+### 任务：
+
+下载物种参考基因组和基因注释（GTF文件）
+
+用hisat2-build构建索引，hisat2比对
+
+使用stringtie进行转录本组装和基因定量
+
+输出：比对结果（BAM）、定量矩阵
+
+**思考题**：
+
+为什么需要构建参考基因组索引？
