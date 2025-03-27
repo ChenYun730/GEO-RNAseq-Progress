@@ -132,9 +132,28 @@ multiqc ./ -n "Cleaned_Data_QC"
 ### 任务：
 
 下载物种参考基因组和基因注释（GTF文件）
+```
+ #下载参考基因组的FASTQ和GTF文件
+ cd /mnt/alamo01/users/chenyun730/program/test/compare
+ mkdir homo_sapiens
+ wget ftp://ftp.ensembl.org/pub/release-104/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+ wget ftp://ftp.ensembl.org/pub/release-104/gtf/homo_sapiens/Homo_sapiens.GRCh38.104.gtf.gz
+ # 解压文件
+ gunzip Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+ gunzip Homo_sapiens.GRCh38.104.gtf.gz
+```
 
 用hisat2-build构建索引，hisat2比对
-
+```
+#先构建索引再对比
+hisat2 -k 1 -p 64 -x /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/Homo_sapiens.GRCh38.104.gtf.gz
+  -S SRR27961779.sam \
+  --novel-splicesite-outfile SRR27961779_junction.bed \
+  --no-unal --dta \
+  --un-conc-gz SRR27961779_ummapped.fq.gz \
+  -1 /mnt/alamo01/users/chenyun730/program/test/clean_data/SRR27961779_cleaned_1.fp.gz \
+  -2 /mnt/alamo01/users/chenyun730/program/test/clean_data/SRR27961779_cleaned_2.fp.gz
+```
 使用stringtie进行转录本组装和基因定量
 
 输出：比对结果（BAM）、定量矩阵
@@ -142,3 +161,11 @@ multiqc ./ -n "Cleaned_Data_QC"
 **思考题**：
 
 为什么需要构建参考基因组索引？
+
+1. 加速对比，减少对比时间；
+   
+2. 占用更少的内存；
+   
+3. 支持复杂比对模式：
+     （a）剪接比对：RNA-seq数据需检测外显子连接，索引会预存剪切位点信息（HISAT2的snp_tran索引）；
+     （b）突变容忍：包含SNP/突变的索引（如genome_snp_tran）可提高多态性样本的比对率。
