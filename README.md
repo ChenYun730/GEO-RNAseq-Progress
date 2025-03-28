@@ -146,17 +146,60 @@ multiqc ./ -n "Cleaned_Data_QC"
 用hisat2-build构建索引，hisat2比对
 ```
 #先构建索引再对比
-hisat2 -k 1 -p 64 -x /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/Homo_sapiens.GRCh38.104.gtf.gz
+hisat2-build -p 64 \
+  /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/GRCh38.fa \     /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/genome_index/genome_index \                                  2> /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/index_build.log
+
+# 检查索引文件
+ls -lh /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/genome_index/
+
+hisat2 -k 1 -p 64 -x /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/genome_index \
   -S SRR27961779.sam \
   --novel-splicesite-outfile SRR27961779_junction.bed \
   --no-unal --dta \
   --un-conc-gz SRR27961779_ummapped.fq.gz \
   -1 /mnt/alamo01/users/chenyun730/program/test/clean_data/SRR27961779_cleaned_1.fp.gz \
   -2 /mnt/alamo01/users/chenyun730/program/test/clean_data/SRR27961779_cleaned_2.fp.gz
+
+#deepseek版本
+hisat2 -k 1 -p 64 \
+  -x /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/genome_index/genome_index \
+  -S SRR27961779.sam \
+  --novel-splicesite-outfile SRR27961779_junction.bed \
+  --no-unal --dta \
+  --un-conc-gz SRR27961779_unmapped.fq.gz \
+  -1 /mnt/alamo01/users/chenyun730/program/test/clean_data/SRR27961779_cleaned_1.fp.gz \
+  -2 /mnt/alamo01/users/chenyun730/program/test/clean_data/SRR27961779_cleaned_2.fp.gz \
+  2> SRR27961779.align.stats
+
+#转换SAM为BAM并排序
+samtools sort -@ 16 \
+  -o /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.sorted.bam \
+  /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.sam
+
+samtools index /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.sorted.bam
+rm /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.sam  # 清理中间文件
+
+#使用GTF文件进行转录本定量（StringTie）
+stringtie /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.sorted.bam \
+  -G /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/Homo_sapiens.GRCh38.104.gtf \
+  -o /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.gtf \
+  -p 64 \
+  -B  # 生成Ballgown兼容文件
+
 ```
+
 使用stringtie进行转录本组装和基因定量
+```
+stringtie /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.sorted.bam \
+  -G /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/Homo_sapiens.GRCh38.104.gtf \
+  -o /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.gtf \
+  -p 64 \
+  -B  # 生成Ballgown兼容文件
+
+```
 
 输出：比对结果（BAM）、定量矩阵
+
 
 **思考题**：
 
