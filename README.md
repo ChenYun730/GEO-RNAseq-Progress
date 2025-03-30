@@ -157,7 +157,7 @@ vim hist2_index.sh
 chmod 777 hist2_index.sh
 
 #提交任务
-qsub -V -l cpu=64:mem=64G:h=biohpc004 -q cpu8380 -N hisat2_index /mnt/alamo01/users/chenyun730/program/test/scripts/hist2_index.sh
+qsub -V -l cpu=64:mem=64G:h=biohpc004 -q cpu8380 -N hisat2_index /mnt/alamo01/users/chenyun730/program/test/scripts/hisat2_index.sh
 # qstat查看任务队列；qstat -f ID 查看任务； qdel 删除任务
 
 # 检查索引文件
