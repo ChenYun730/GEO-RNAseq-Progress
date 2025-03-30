@@ -150,11 +150,15 @@ mkdir -p /mnt/alamo01/users/chenyun730/program/test/scripts
 mkdir -p /mnt/alamo01/users/chenyun730/program/test/logs
 
 #新建shell脚本
-vim hist2_index.sh
+vim hisat2_index.sh
 #! /usr/bin/sh
-/mnt/alamo01/users/chenyun730/micromamba/envs/bwa_env/bin/bwa index -a bwtsw GRCh38.fa
+#micromamba activate R441
+/mnt/alamo01/users/chenyun730/program/test/homo_sapiens/homo_data
+hisat2-build -p 64 GRCh38.fa GRCh38
+2> /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/home_data
+
 #赋予脚本执行权限
-chmod 777 hist2_index.sh
+chmod 777 hisat2_index.sh
 
 #提交任务
 qsub -V -l cpu=64:mem=64G:h=biohpc004 -q cpu8380 -N hisat2_index /mnt/alamo01/users/chenyun730/program/test/scripts/hisat2_index.sh
