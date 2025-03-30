@@ -145,22 +145,25 @@ multiqc ./ -n "Cleaned_Data_QC"
 
 用hisat2-build构建索引，hisat2比对
 ```
-#先构建索引再对比
-hisat2-build -p 64 \
-  /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/GRCh38.fa \     /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/genome_index/genome_index \                                  2> /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/index_build.log
+# 参考基因组 GRCh38.fa 构建索引（提交脚本并投递任务）
+mkdir -p /mnt/alamo01/users/chenyun730/program/test/scripts
+mkdir -p /mnt/alamo01/users/chenyun730/program/test/logs
+
+#新建shell脚本
+vim hist2_index.sh
+#! /usr/bin/sh
+/mnt/alamo01/users/chenyun730/micromamba/envs/bwa_env/bin/bwa index -a bwtsw GRCh38.fa
+#赋予脚本执行权限
+chmod 777 hist2_index.sh
+
+#提交任务
+qsub -V -l cpu=64:mem=64G:h=biohpc004 -q cpu8380 -N hisat2_index /mnt/alamo01/users/chenyun730/program/test/scripts/hist2_index.sh
+# qstat查看任务队列；qstat -f ID 查看任务； qdel 删除任务
 
 # 检查索引文件
 ls -lh /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/genome_index/
 
-hisat2 -k 1 -p 64 -x /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/genome_index \
-  -S SRR27961779.sam \
-  --novel-splicesite-outfile SRR27961779_junction.bed \
-  --no-unal --dta \
-  --un-conc-gz SRR27961779_ummapped.fq.gz \
-  -1 /mnt/alamo01/users/chenyun730/program/test/clean_data/SRR27961779_cleaned_1.fp.gz \
-  -2 /mnt/alamo01/users/chenyun730/program/test/clean_data/SRR27961779_cleaned_2.fp.gz
-
-#deepseek版本
+# 进行比对
 hisat2 -k 1 -p 64 \
   -x /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/genome_index/genome_index \
   -S SRR27961779.sam \
@@ -170,6 +173,7 @@ hisat2 -k 1 -p 64 \
   -1 /mnt/alamo01/users/chenyun730/program/test/clean_data/SRR27961779_cleaned_1.fp.gz \
   -2 /mnt/alamo01/users/chenyun730/program/test/clean_data/SRR27961779_cleaned_2.fp.gz \
   2> SRR27961779.align.stats
+
 
 #转换SAM为BAM并排序
 samtools sort -@ 16 \
