@@ -153,15 +153,15 @@ mkdir -p /mnt/alamo01/users/chenyun730/program/test/logs
 vim hisat2_index.sh
 #! /usr/bin/sh
 #micromamba activate R441
-/mnt/alamo01/users/chenyun730/program/test/homo_sapiens/homo_data
+cd /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/homo_data
 hisat2-build -p 64 GRCh38.fa GRCh38
 2> /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/home_data
 
 #赋予脚本执行权限
 chmod 777 hisat2_index.sh
 
-#提交任务
-qsub -V -l cpu=64:mem=64G:h=biohpc004 -q cpu8380 -N hisat2_index /mnt/alamo01/users/chenyun730/program/test/scripts/hisat2_index.sh
+#提交任务(无需指定队列）
+qsub -V -l cpu=64:mem=64G -q cpu8380 -N hisat2_index /mnt/alamo01/users/chenyun730/program/test/scripts/hisat2_index.sh
 # qstat查看任务队列；qstat -f ID 查看任务； qdel 删除任务
 
 # 检查索引文件
