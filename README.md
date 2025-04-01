@@ -161,15 +161,19 @@ hisat2-build -p 64 GRCh38.fa GRCh38
 chmod 777 hisat2_index.sh
 
 #提交任务(无需指定队列）
-qsub -V -l cpu=64:mem=64G -q cpu8380 -N hisat2_index /mnt/alamo01/users/chenyun730/program/test/scripts/hisat2_index.sh
+qsub -cwd -V -l cpu=64:mem=64G -q fast -N hisat2_index /mnt/alamo01/users/chenyun730/program/test/scripts/hisat2_index.sh
 # qstat查看任务队列；qstat -f ID 查看任务； qdel 删除任务
 
 # 检查索引文件
 ls -lh /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/genome_index/
 
 # 进行比对
+#! /bin/bash
+#source /mnt/alamo01/users/chenyun730/bin/micromamba
+#micromamba activate R441
+cd /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/alignment/
 hisat2 -k 1 -p 64 \
-  -x /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/genome_index/genome_index \
+  -x /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/homo_data/GRCh38 \
   -S SRR27961779.sam \
   --novel-splicesite-outfile SRR27961779_junction.bed \
   --no-unal --dta \
@@ -178,31 +182,73 @@ hisat2 -k 1 -p 64 \
   -2 /mnt/alamo01/users/chenyun730/program/test/clean_data/SRR27961779_cleaned_2.fp.gz \
   2> SRR27961779.align.stats
 
+#多个文件进行比对
+#! /bin/bash
+#source /mnt/alamo01/users/chenyun730/bin/micromamba
+#micromamba activate R441
+SAMPLES=(SRR27961778 SRR27961779 SRR27961780 SRR27961787 SRR27961788 SRR27961789)
+cd /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/alignment/
+for SAMPLE in "${SAMPLES[@]}"; do
+hisat2 -k 1 -p 64 \
+  -x /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/homo_data/GRCh38 \
+  -S ${SAMPLE}.sam \
+  --novel-splicesite-outfile ${SAMPLE}_junction.bed \
+  --no-unal --dta \
+  --un-conc-gz ${SAMPLE}_unmapped.fq.gz \
+  -1 /mnt/alamo01/users/chenyun730/program/test/clean_data/${SAMPLE}_cleaned_1.fp.gz \
+  -2 /mnt/alamo01/users/chenyun730/program/test/clean_data/${SAMPLE}_cleaned_2.fp.gz \
+  2> ${SAMPLE}.align.stats
+echo "Submitted alignment job for ${SAMPLE}"
+done
 
-#转换SAM为BAM并排序
-samtools sort -@ 16 \
-  -o /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.sorted.bam \
-  /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.sam
-
-samtools index /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.sorted.bam
-rm /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.sam  # 清理中间文件
-
-#使用GTF文件进行转录本定量（StringTie）
-stringtie /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.sorted.bam \
-  -G /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/Homo_sapiens.GRCh38.104.gtf \
-  -o /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.gtf \
-  -p 64 \
-  -B  # 生成Ballgown兼容文件
-
+转换SAM为BAM并排序
 ```
-
+$ vim samtools.sh
+#! /bin/bash
+#source /mnt/alamo01/users/chenyun730/bin/micromamba
+#micromamba activate R441
+SAMPLES=(SRR27961778 SRR27961779 SRR27961780 SRR27961787 SRR27961788 SRR27961789)
+cd /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/alignment/
+for SAMPLE in "${SAMPLES[@]}"; do
+echo "Processing ${SAMPLE}..."
+  samtools sort -@ 8 -o ${SAMPLE}_sorted.bam ${SAMPLE}.sam
+  samtools index ${SAMPLE}_sorted.bam
+  echo "Finished processing ${SAMPLE}"
+done
+```
 使用stringtie进行转录本组装和基因定量
 ```
-stringtie /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.sorted.bam \
-  -G /mnt/alamo01/users/chenyun730/program/test/compare/homo_sapiens/Homo_sapiens.GRCh38.104.gtf \
-  -o /mnt/alamo01/users/chenyun730/program/test/alignment/SRR27961779.gtf \
+$ vim stringtie.sh
+#! /bin/bash
+#micromamba activate R441
+SAMPLES=(SRR27961778 SRR27961779 SRR27961780 SRR27961787 SRR27961788 SRR27961789)
+for SAMPLE in "${SAMPLES[@]}"; do
+        echo "Processing ${SAMPLE}..."
+        stringtie /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/alignment/${SAMPLE}_sorted.bam \
+  -G /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/homo_data/Homo_sapiens.GRCh38.109.gtf \
+  -o /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/alignment/${SAMPLE}.gtf \
   -p 64 \
-  -B  # 生成Ballgown兼容文件
+  -B
+        echo "Finished processing ${SAMPLE}"
+done
+
+ ls /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/alignment/*.gtf > gtf_list.txt
+ stringtie --merge -G /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/homo_data/Homo_sapiens.GRCh38.109.gtf   -o merged.gtf   gtf_list.txt
+ 
+ #用sh.提交，计算样本的基因表达量（以合并后的基因组做参考）
+#! /bin/bash
+#micromamba activate R441
+SAMPLES=(SRR27961778 SRR27961779 SRR27961780 SRR27961787 SRR27961788 SRR27961789)
+for SAMPLE in "${SAMPLES[@]}"; do
+    echo "Processing ${SAMPLE}..."
+    stringtie /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/alignment/${SAMPLE}_sorted.bam \
+        -G /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/alignment/merged.gtf \
+         -o /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/quantify/${SAMPLE}.gtf \
+         -e \
+         -B \
+         -A /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/quantify/${SAMPLE}_gene_abundance.tab
+     echo "Finished processing ${SAMPLE}"
+done
 
 ```
 
