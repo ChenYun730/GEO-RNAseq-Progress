@@ -308,6 +308,7 @@ summary(zscore_transcript_counts)
  # 仅保留至少 1 个非 NA 值的基因
 filtered_counts <- zscore_gene_counts[rowSums(is.na(zscore_gene_counts)) == 0, ]
 filtered_counts <- filtered_counts[rowSums(is.nan(filtered_counts)) == 0, ]
+pdf("gene_heatmap.pdf", width = 8, height = 6)
  pheatmap(filtered_counts,
          cluster_rows = TRUE,
          cluster_cols = TRUE,
@@ -316,41 +317,46 @@ filtered_counts <- filtered_counts[rowSums(is.nan(filtered_counts)) == 0, ]
          show_colnames = TRUE,
          color = colorRampPalette(c("blue", "white", "red"))(50),
          main = "Gene Expression Heatmap ")
+dev.off()
 
-pheatmap(zscore_gene_counts,
+#转录本水平热图
+  # 仅保留至少 1 个非 NA 值的基因
+filtered_counts_transcript <- zscore_transcript_counts[rowSums(is.na(zscore_transcript_counts)) == 0, ]
+filtered_counts_transcript <- filtered_counts_transcript[rowSums(is.nan(filtered_counts_transcript)) == 0, ]
+#热图只需要 变异度最高的 500~1000 个基因/转录本,
+# 计算标准差
+transcript_sd <- apply(filtered_counts_transcript, 1, sd, na.rm = TRUE)
+
+# 选取标准差最高的前 1000 个转录本
+top_transcripts <- names(sort(transcript_sd, decreasing = TRUE)[1:1000])
+pdf("transcript_heatmap.pdf", width = 8, height = 6)
+filtered_counts_transcript_top <- filtered_counts_transcript[top_transcripts, ]
+pheatmap(filtered_counts_transcript_top,
          cluster_rows = TRUE,
          cluster_cols = TRUE,
          scale = "row",
          show_rownames = FALSE,
          show_colnames = TRUE,
          color = colorRampPalette(c("blue", "white", "red"))(50),
-         main = "Gene Expression Heatmap")
+         main = "Top 1000 Transcript Expression Heatmap")
+dev.off()
 
-#转录本水平热图
-  # 仅保留至少 1 个非 NA 值的基因
-filtered_counts_transcript <- zscore_transcript_counts[rowSums(is.na(zscore_transcript_counts)) == 0, ]
-filtered_counts_transcript <- filtered_counts_transcript[rowSums(is.nan(filtered_counts_transcript)) == 0, ]
-
-pheatmap(filtered_counts_transcript, 
-         cluster_rows = TRUE, 
-         cluster_cols = TRUE, 
-         scale = "row",
-         show_rownames = FALSE,
-         show_colnames = TRUE,
-         color = colorRampPalette(c("blue", "white", "red"))(50),
-         main = "Transcript Expression Heatmap")
 ```
 3.PCA分析
 ```
 # 计算 PCA
-gene_pca_res <- PCA(t(zscore_gene_counts), graph = FALSE)
+gene_pca_res <- PCA(t(zscore_gene_counts), graph = FALSE) #如果NA、NAN和IFN值太多可用fliter之后的数据
+gene_pca_res <- PCA(t(filtered_counts ), graph = FALSE)
+
 
 # PCA 可视化
+pdf("gene_PCA.pdf", width = 8, height = 6)
 fviz_pca_ind(gene_pca_res,
              col.ind = "cos2", # 根据 cos2 贡献度着色
              gradient.cols = c("blue", "yellow", "red"),
              repel = TRUE, # 避免标签重叠
              title = "PCA of Gene Expression")
+dev.off()
 # 计算 PCA
 transcript_pca_res <- PCA(t(zscore_transcript_counts), graph = FALSE)
 
