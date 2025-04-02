@@ -122,8 +122,7 @@ multiqc ./ -n "Cleaned_Data_QC"
 4.若高比例的重复序列或低复杂度序列：过滤掉长度< 50bp 的 reads（默认 15）-l 50；移除低复杂度序列-low_complexity_filter；
    
 5.若局部区域质量波动大：减小滑动窗口大小-W；滑动窗口平均质量阈值从 30 降至 25（更宽松）-M
-   
-# 🤷‍♀️未完成   
+    
 
 ## 模块3：比对与定量
 
@@ -200,9 +199,10 @@ hisat2 -k 1 -p 64 \
   2> ${SAMPLE}.align.stats
 echo "Submitted alignment job for ${SAMPLE}"
 done
-
-转换SAM为BAM并排序
 ```
+使用samtools和stringtie进行转录本组装和基因定量
+```
+#转换SAM为BAM并排序
 $ vim samtools.sh
 #! /bin/bash
 #source /mnt/alamo01/users/chenyun730/bin/micromamba
@@ -215,9 +215,8 @@ echo "Processing ${SAMPLE}..."
   samtools index ${SAMPLE}_sorted.bam
   echo "Finished processing ${SAMPLE}"
 done
-```
-使用stringtie进行转录本组装和基因定量
-```
+
+#使用stringtie进行转录本组装和基因定量
 $ vim stringtie.sh
 #! /bin/bash
 #micromamba activate R441
@@ -249,6 +248,8 @@ for SAMPLE in "${SAMPLES[@]}"; do
          -A /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/quantify/${SAMPLE}_gene_abundance.tab
      echo "Finished processing ${SAMPLE}"
 done
+#下载prepDE.py3运行得到 .csv文件
+$ python3 /mnt/alamo01/users/chenyun730/program/test/scripts/prepDE.py3 -i /mnt/alamo01/users/chenyun730/program/test/homo_sapiens/quantify/quantify_gtf_list.txt -v
 
 ```
 
@@ -266,3 +267,136 @@ done
 3. 支持复杂比对模式：
      （a）剪接比对：RNA-seq数据需检测外显子连接，索引会预存剪切位点信息（HISAT2的snp_tran索引）；
      （b）突变容忍：包含SNP/突变的索引（如genome_snp_tran）可提高多态性样本的比对率。
+
+
+# 🤷‍♀️未完成  
+### 模块4：数据分析与可视化
+
+**目标**：对定量数据进行质控并与GEO原作者的表达矩阵比较。
+
+**任务**：
+
+1. 表达矩阵的log2转换和标准化
+```
+#加载R包和.csv数据
+library(DESeq2)
+library(pheatmap)
+library(ggplot2)
+library(FactoMineR)
+library(factoextra)
+>gene_counts <-read.csv("/mnt/alamo01/users/chenyun730/program/test/homo_sapiens/quantify/gene_count_matrix.csv", row.names = 1, header = TRUE)
+>transcript_counts <- read.csv("/mnt/alamo01/users/chenyun730/program/test/homo_sapiens/quantify/transcript_count_matrix.csv", row.names = 1, header = TRUE)
+>head(gene_counts)
+>head(transcript_counts)
+
+# log2 转换（加 1 避免 log(0)）
+log_gene_counts <- log2(gene_counts + 1)
+log_transcript_counts <- log2(transcript_counts + 1)
+
+# Z-score 归一化
+zscore_gene_counts <- t(scale(t(log_gene_counts)))
+zscore_transcript_counts <- t(scale(t(log_transcript_counts)))
+
+# 检查标准化结果
+summary(zscore_gene_counts)
+summary(zscore_transcript_counts)
+```
+
+2. 热图
+```
+# 基因水平热图
+ # 仅保留至少 1 个非 NA 值的基因
+filtered_counts <- zscore_gene_counts[rowSums(is.na(zscore_gene_counts)) == 0, ]
+filtered_counts <- filtered_counts[rowSums(is.nan(filtered_counts)) == 0, ]
+ pheatmap(filtered_counts,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         scale = "row",
+         show_rownames = FALSE,
+         show_colnames = TRUE,
+         color = colorRampPalette(c("blue", "white", "red"))(50),
+         main = "Gene Expression Heatmap ")
+
+pheatmap(zscore_gene_counts,
+         cluster_rows = TRUE,
+         cluster_cols = TRUE,
+         scale = "row",
+         show_rownames = FALSE,
+         show_colnames = TRUE,
+         color = colorRampPalette(c("blue", "white", "red"))(50),
+         main = "Gene Expression Heatmap")
+
+#转录本水平热图
+  # 仅保留至少 1 个非 NA 值的基因
+filtered_counts_transcript <- zscore_transcript_counts[rowSums(is.na(zscore_transcript_counts)) == 0, ]
+filtered_counts_transcript <- filtered_counts_transcript[rowSums(is.nan(filtered_counts_transcript)) == 0, ]
+
+pheatmap(filtered_counts_transcript, 
+         cluster_rows = TRUE, 
+         cluster_cols = TRUE, 
+         scale = "row",
+         show_rownames = FALSE,
+         show_colnames = TRUE,
+         color = colorRampPalette(c("blue", "white", "red"))(50),
+         main = "Transcript Expression Heatmap")
+```
+3.PCA分析
+```
+# 计算 PCA
+gene_pca_res <- PCA(t(zscore_gene_counts), graph = FALSE)
+
+# PCA 可视化
+fviz_pca_ind(gene_pca_res,
+             col.ind = "cos2", # 根据 cos2 贡献度着色
+             gradient.cols = c("blue", "yellow", "red"),
+             repel = TRUE, # 避免标签重叠
+             title = "PCA of Gene Expression")
+# 计算 PCA
+transcript_pca_res <- PCA(t(zscore_transcript_counts), graph = FALSE)
+
+# PCA 可视化
+fviz_pca_ind(transcript_pca_res,
+             col.ind = "cos2",
+             gradient.cols = c("blue", "yellow", "red"),
+             repel = TRUE,
+             title = "PCA of Transcript Expression")
+
+
+```
+4. 输出：可视化结果（热图、PCA图）
+```
+# 保存基因水平热图
+pdf("gene_heatmap.pdf", width = 8, height = 6)
+pheatmap(zscore_gene_counts, cluster_rows = TRUE, cluster_cols = TRUE, scale = "row",
+         show_rownames = FALSE, show_colnames = TRUE,
+         color = colorRampPalette(c("blue", "white", "red"))(50),
+         main = "Gene Expression Heatmap")
+dev.off()
+
+# 保存转录本水平热图
+pdf("transcript_heatmap.pdf", width = 8, height = 6)
+pheatmap(zscore_transcript_counts, cluster_rows = TRUE, cluster_cols = TRUE, scale = "row",
+         show_rownames = FALSE, show_colnames = TRUE,
+         color = colorRampPalette(c("blue", "white", "red"))(50),
+         main = "Transcript Expression Heatmap")
+dev.off()
+
+# 保存基因水平 PCA 图
+pdf("gene_PCA.pdf", width = 8, height = 6)
+fviz_pca_ind(gene_pca_res, col.ind = "cos2",
+             gradient.cols = c("blue", "yellow", "red"),
+             repel = TRUE, title = "PCA of Gene Expression")
+dev.off()
+
+# 保存转录本水平 PCA 图
+pdf("transcript_PCA.pdf", width = 8, height = 6)
+fviz_pca_ind(transcript_pca_res, col.ind = "cos2",
+             gradient.cols = c("blue", "yellow", "red"),
+             repel = TRUE, title = "PCA of Transcript Expression")
+dev.off()
+
+```
+
+**思考题**：
+
+如果PCA中样本未能按组分离，原因可能是什么？
