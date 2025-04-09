@@ -337,7 +337,7 @@ fpkm_log2 <- log2(fpkm_matrix + 1)
 
 2. 热图
 ```
-pdf("heatmap_top500_genes.pdf", width=8, height=10)
+/mnt/alamo01/users/chenyun730/program/test/results/
 pheatmap(fpkm_log2[top500, ],
          scale="row",
          show_rownames=FALSE,
@@ -345,6 +345,15 @@ pheatmap(fpkm_log2[top500, ],
          cluster_cols=TRUE,
          main="Top 500 Most Variable Genes")
 dev.off()
+
+# 修改文件名
+expr <- read.csv("your_expression_matrix.csv", row.names = 1)  # or .tsv with read.delim   # 读取表达矩阵
+srr_ids <- c("SRR27961778", "SRR27961779", "SRR27961780", "SRR27961787", "SRR27961788", "SRR27961789") #指定你想提取的样本
+new_names <- c("Mock-1", "Mock-2", "Mock-3", "SARS-2-1", "SARS-2-2", "SARS-2-3") #对应的目标命名
+expr_subset <- expr[, srr_ids] # 提取感兴趣的6个样本
+colnames(expr_subset) <- new_names  #重命名列
+write.csv(expr_subset, file = "subset_6samples_renamed.csv") #保存结果
+
 ```
 
 3. PCA图
@@ -364,6 +373,78 @@ ggplot(pca_df, aes(PC1, PC2, label=Sample)) +
   theme_minimal() +
   labs(title="PCA of Samples", x="PC1", y="PC2")
 dev.off()
+```
+下载原作者的矩阵进行比对
+
+1.自己的counts矩阵先绘图检查异质性
+```
+micromamba install -c conda-forge -c bioconda bioconductor-geoquery
+# 检查重复的 gene_id
+sum(duplicated(rownames(counts)))  # 返回重复基因数量，返回0
+sum(is.na(counts)))
+counts[is.na(counts)] <- 0# 替换 NA 为 0（或根据需求过滤低表达基因）
+keep <- rowSums(counts > 1) >= 3
+counts <- counts[keep, ]# 保留至少在 3 个样本中 count > 1 的基因
+colData <- data.frame(
+  group = factor(rep(c("Mock", "SARS-2"), each = 3)),
+  row.names = colnames(counts)
+) # 定义样本分组（Mock vs SARS-2）
+
+# 构建 DESeqDataSet
+dds <- DESeqDataSetFromMatrix(
+  countData = counts,
+  colData = colData,
+  design = ~ group
+)
+
+# 转换数据（blind=TRUE 适用于无监督分析）
+rld <- rlog(dds, blind = TRUE)  #rlog 更适合小数据集（样本数 < 30）
+rld_matrix <- assay(rld)  # 提取转换后的矩阵
+#修改命名里的“-”
+colData$group <- gsub("-", "_", colData$group)
+ann_colors <- list(Group = c(Mock = "blue", SARS_2 = "red")) #热图的步骤
+#绘制 PCA 图（分组着色）
+pca_data <- plotPCA(rld, intgroup = "group", returnData = TRUE)
+percent_var <- round(100 * attr(pca_data, "percentVar"))
+
+morandi_blue <- "#89CFF0" 
+morandi_orange <- "#FFB347"
+ ggplot(pca_data, aes(PC1, PC2, color = group)) +
+  geom_point(size = 3, alpha = 0.8) +
+  scale_color_manual(values = c("Mock" = "#89CFF0", "SARS-2" = "#FFB347")) +
+  xlab(paste0("PC1 (", percent_var[1], "%)")) +
+  ylab(paste0("PC2 (", percent_var[2], "%)")) +
+  ggtitle("PCA Plot of my_matrix") +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    legend.position = "right"
+  ) +
+  geom_text(aes(label = name), vjust = 1.5, size = 4)
+ggsave("/mnt/alamo01/users/chenyun730/program/test/results/PCA_plot.png", width = 8, height = 6, dpi = 300)
+
+#绘制热图
+library(pheatmap)
+top_genes <- head(order(rowVars(rld_matrix), decreasing = TRUE), 500)
+annotation_col <- data.frame(
+  Group = colData$group,
+  row.names = colnames(counts))
+ann_colors <- list(
+  Group = c(Mock = "#89CFF0", SARS_2 = "#FFB347"))
+ pdf("/mnt/alamo01/users/chenyun730/program/test/results/heatmap_plot.pdf",width = 10, height = 12, pointsize = 15 )
+pheatmap(
+  rld_matrix[top_genes, ],
+  scale = "row",
+  cluster_rows = TRUE,
+  cluster_cols = TRUE,
+  show_rownames = FALSE,
+  annotation_col = annotation_col,
+  annotation_colors = ann_colors,
+  main = "Top 500 Genes by Variance (rlog-transformed)",
+  color = colorRampPalette(c("navy", "white", "firebrick3"))(100)
+)
+dev.off()
+
 ```
 
 **思考题**：
