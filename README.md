@@ -396,7 +396,6 @@ dds <- DESeqDataSetFromMatrix(
   colData = colData,
   design = ~ group
 )
-
 # 转换数据（blind=TRUE 适用于无监督分析）
 rld <- rlog(dds, blind = TRUE)  #rlog 更适合小数据集（样本数 < 30）
 rld_matrix <- assay(rld)  # 提取转换后的矩阵
@@ -422,7 +421,6 @@ morandi_orange <- "#FFB347"
   ) +
   geom_text(aes(label = name), vjust = 1.5, size = 4)
 ggsave("/mnt/alamo01/users/chenyun730/program/test/results/PCA_plot.png", width = 8, height = 6, dpi = 300)
-
 #绘制热图
 library(pheatmap)
 top_genes <- head(order(rowVars(rld_matrix), decreasing = TRUE), 500)
@@ -431,7 +429,7 @@ annotation_col <- data.frame(
   row.names = colnames(counts))
 ann_colors <- list(
   Group = c(Mock = "#89CFF0", SARS_2 = "#FFB347"))
- pdf("/mnt/alamo01/users/chenyun730/program/test/results/heatmap_plot.pdf",width = 10, height = 12, pointsize = 15 )
+pdf("/mnt/alamo01/users/chenyun730/program/test/results/heatmap_plot.pdf",width = 10, height = 12, pointsize = 15 )
 pheatmap(
   rld_matrix[top_genes, ],
   scale = "row",
@@ -444,8 +442,79 @@ pheatmap(
   color = colorRampPalette(c("navy", "white", "firebrick3"))(100)
 )
 dev.off()
+```
+2.下载GEO原作者的矩阵进行分析（GSE255647_all.counts.tsv.gz）
+```
+# 读取 count 矩阵（gz 格式的 TSV 文件）
+counts <- read.table("GSE255647_all.counts.tsv.gz", 
+                     header = TRUE, 
+                     sep = "\t", 
+                     row.names = 1, 
+                     check.names = FALSE)
+head(counts[, 1:6])
+str(counts)
+# 提取目标样本
+selected_samples <- c("SRR27961778", "SRR27961779", "SRR27961780", 
+                      "SRR27961787", "SRR27961788", "SRR27961789")
+
+counts_subset <- counts[, selected_samples]
+
+# 重命名为更易懂的格式
+colnames(counts_subset) <- c("Mock-1", "Mock-2", "Mock-3", 
+                             "SARS-2-1", "SARS-2-2", "SARS-2-3")
+# 选择目标样本
+target_samples <- c("MOCK_12hpi_rep1", "MOCK_12hpi_rep2", "MOCK_12hpi_rep3",
+                    "SARS-2_12hpi_rep1", "SARS-2_12hpi_rep2", "SARS-2_12hpi_rep3")
+
+counts_subset <- counts[, target_samples]
+
+# 重命名列
+colnames(counts_subset) <- c("Mock-1", "Mock-2", "Mock-3",
+                             "SARS-2-1", "SARS-2-2", "SARS-2-3")
+library(DESeq2)
+
+# 构建样本信息
+group <- factor(c("Mock", "Mock", "Mock", "SARS-2", "SARS-2", "SARS-2"))
+col_data <- data.frame(row.names = colnames(counts_subset),
+                       condition = group)
+
+# 构建 DESeq2 对象
+dds <- DESeqDataSetFromMatrix(countData = counts_subset,
+                              colData = col_data,
+                              design = ~ condition)
+
+# 过滤低表达基因（推荐）
+dds <- dds[rowSums(counts(dds)) > 10, ]
+
+# 运行标准 DESeq2 流程
+dds <- DESeq(dds)
+
+# 绘制热图+PCA图
+rld <- rlog(dds, blind = TRUE)
+png("/mnt/alamo01/users/chenyun730/program/test/results/PCA_plot.png", 
+    width = 800, height = 800)
+plotPCA(rld, intgroup = "condition")
+dev.off()
+
+library(pheatmap)
+library(matrixStats)
+top_var_genes <- head(order(rowVars(assay(rld)), decreasing = TRUE), 500)
+mat <- assay(rld)[top_var_genes, ]
+mat <- t(scale(t(mat)))
+pdf("/mnt/alamo01/users/chenyun730/program/test/results/Heatmap_geo.pdf", 
+    width = 8, height = 10)
+pheatmap(mat, 
+         annotation_col = col_data,
+         show_colnames = TRUE,
+         show_rownames = FALSE,
+         fontsize_row = 6，
+          main = "Top 500 Genes by Variance of geo_matrix", )
+dev.off()
 
 ```
+
+3.将12个样本进行合并分析
+
 
 **思考题**：
 
