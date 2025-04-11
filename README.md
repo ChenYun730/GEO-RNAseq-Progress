@@ -490,7 +490,7 @@ dds <- dds[rowSums(counts(dds)) > 10, ]
 dds <- DESeq(dds)
 
 # 绘制热图+PCA图
-rld <- rlog(dds, blind = TRUE)
+rld <- rlog(dds, blind = TRUE) #另一个 vsd <- vst(dds, blind = TRUE)
 png("/mnt/alamo01/users/chenyun730/program/test/results/PCA_plot.png", 
     width = 800, height = 800)
 plotPCA(rld, intgroup = "condition")
@@ -498,7 +498,7 @@ dev.off()
 
 library(pheatmap)
 library(matrixStats)
-top_var_genes <- head(order(rowVars(assay(rld)), decreasing = TRUE), 500)
+top_var_genes <- head(order(rowVars(assay(rld)), decreasing = TRUE), 500) #rld改为vst
 mat <- assay(rld)[top_var_genes, ]
 mat <- t(scale(t(mat)))
 pdf("/mnt/alamo01/users/chenyun730/program/test/results/Heatmap_geo.pdf", 
@@ -514,6 +514,123 @@ dev.off()
 ```
 
 3.将12个样本进行合并分析
+**发现命名问题并矫正——symbol**
+```
+count_matrix <- read.csv("/mnt/alamo01/users/chenyun730/program/test/my_matrix/count_matrix.csv", row.names = NULL, check.names = FALSE)
+count_matrix$symbol <- ifelse(grepl("\\|", count_matrix$gene_id),
+                              sub(".*\\|", "", count_matrix$gene_id),
+                              count_matrix$gene_id)
+ library(dplyr)
+ symbol_matrix <- count_matrix %>%
+  select(-gene_id) %>%
+  group_by(symbol) %>%
+  summarise(across(everything(), sum)) %>%
+  ungroup()
+symbol_matrix <- symbol_matrix %>%
+  relocate(symbol, .before = everything())
+ write.csv(symbol_matrix, "/mnt/alamo01/users/chenyun730/program/test/my_matrix/symbol_count_matrix.csv", row.names = FALSE)
+```
+ 获得原作者的矩阵count_matrix_geo.csv
+ ```
+ counts_all <- read.table("/mnt/alamo01/users/chenyun730/program/test/geo_matrix/GSE255647_all.counts.tsv.gz",header = TRUE, sep = "\t", row.names = 1, check.names = FALSE)
+selected_samples <- c("MOCK_24hpi_rep1", 
+                      "MOCK_24hpi_rep2", 
+                      "MOCK_24hpi_rep3", 
+                      "SARS-2_24hpi_rep1", 
+                      "SARS-2_24hpi_rep2", 
+                      "SARS-2_24hpi_rep3")
+count_matrix_geo <- counts_all[, selected_samples]
+count_matrix_geo <- cbind(gene_id = rownames(count_matrix_geo), count_matrix_geo)
+colnames(count_matrix_geo)[2:7] <- c("Mock-1", "Mock-2", "Mock-3", 
+                                     "SARS-2-1", "SARS-2-2", "SARS-2-3")
+write.csv(count_matrix_geo,
+          file = "/mnt/alamo01/users/chenyun730/program/test/geo_matrix/count_matrix_geo.csv",
+          row.names = FALSE,
+          quote = FALSE)
+```
+ 构建合并矩阵（merged_counts)
+```
+>df1 <- read.csv("/mnt/alamo01/users/chenyun730/program/test/my_matrix/symbol_count_matrix.csv", check.names = FALSE)
+>df2 <- read.csv("/mnt/alamo01/users/chenyun730/program/test/geo_matrix/symbol_count_matrix_geo.csv", check.names = FALSE)
+>colnames(df2)[2:ncol(df2)] <- paste0("geo.", colnames(df2)[2:ncol(df2)])
+> merged_df <- full_join(df1, df2, by = "symbol")
+> merged_df[is.na(merged_df)] <- 0
+> write.csv(merged_df, "/mnt/alamo01/users/chenyun730/program/test/results/merged_count_matrix.csv", row.names = FALSE)
+```
+PCA图
+```
+ library(ggplot2)
+library(pheatmap)
+library(dplyr)
+library(tibble)
+library(FactoMineR)
+library(factoextra)
+data <- read.csv("/mnt/alamo01/users/chenyun730/program/test/results/merged_count_matrix.csv", check.names = FALSE)
+rownames(data) <- data$symbol
+data <- data[, -1]
+log_data <- log2(data + 1)
+log_data_filtered <- log_data[apply(log_data, 1, function(x) sd(x) > 0), ]
+pca_data <- t(log_data_filtered)
+pca_result <- prcomp(pca_data, scale. = TRUE)
+ group <- rownames(pca_data)
+group <- ifelse(grepl("^geo\\.Mock", group), "geo.Mock",
+         ifelse(grepl("^geo\\.SARS2", group), "geo.SARS2",
+         ifelse(grepl("^Mock", group), "Mock", "SARS2")))
+group <- factor(group, levels = c("Mock", "SARS2", "geo.Mock", "geo.SARS2"))
+ pca_plot <- fviz_pca_ind(pca_result,
+                         geom.ind = "point",
+                         pointshape = 21,
+                         col.ind = group,
+                         palette = c("#1f77b4", "#d62728", "#2ca02c", "#9467bd"),
+                         addEllipses = TRUE,
+                         legend.title = "Group") +
+  theme_minimal() +
+  ggtitle("PCA of RNA-seq Samples")
+ggsave("PCA_plot.png", plot = pca_plot, width = 6, height = 5, dpi = 300)
+```
+热图
+```
+ library(RColorBrewer)
+> data <- read.csv("/mnt/alamo01/users/chenyun730/program/test/results/merged_count_matrix.csv", header = TRUE, row.names = 1)
+> count_data <- data[, 1:12]
+sum(is.na(scaled_data)) #去除na和全是0的
+ scaled_data[is.na(scaled_data)] <- 0
+scaled_data[is.infinite(scaled_data)] <- 0
+> nonzero_rows <- rowSums(count_data) > 0
+filtered_data <- scaled_data[nonzero_rows, ]
+sum(is.infinite(scaled_data))
+ log_data <- log2(count_data + 1)
+> scaled_data <- t(scale(t(log_data)))
+> sample_groups <- c(rep("Mock", 3), rep("SARS2", 3), rep("geo.Mock", 3), rep("geo.SARS2", 3))
+> annotation_col <- data.frame(Group = factor(sample_groups))
+rownames(annotation_col) <- colnames(scaled_data)
+> group_colors <- list(
+  Group = c(
+    Mock = "#1F77B4",
+    SARS2 = "#FF7F0E",
+    geo.Mock = "#2CA02C",
+    geo.SARS2 = "#D62728"
+  )
+)
+pheatmap(
+  scaled_data,
+  main = "Heatmap of merged_matrix",
+  color = colorRampPalette(rev(brewer.pal(11, "RdBu")))(100),
+  cluster_rows = TRUE,
+  cluster_cols = TRUE,
+  show_rownames = FALSE,
+  show_colnames = TRUE,
+  annotation_col = annotation_col,
+  annotation_colors = group_colors,
+  scale = "row",
+  border_color = NA,
+  fontsize_col = 12,
+  angle_col = 45,
+  filename = "/mnt/alamo01/users/chenyun730/program/test/results/heatmap_merged_matrix.pdf",
+  width = 10,
+  height = 14
+)
+
 
 
 **思考题**：
