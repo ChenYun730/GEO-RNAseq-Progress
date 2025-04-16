@@ -284,7 +284,8 @@ rm /tmp/*_col.tmp /tmp/combined.tmp
 echo "FPKM data for all samples has been merged into $OUTPUT_FILE"
 
 #下载prepDE.py3运行得到 .csv文件（使用count可进行）这里不用
-$ python3 /mnt/alamo01/users/chenyun730/program/test/scripts/prepDE.py3 -i /mnt/alamo01/users/chenyun730/program/test/quantify/quantify_gtf_list.txt -v
+python3 /mnt/alamo01/users/chenyun730/program/test/scripts/prepDE.py3 -i /mnt/alamo01/users/chenyun730/program/test/quantify/quantify_gtf_list.txt -v
+python3 /mnt/alamo01/users/chenyun730/program/test/scripts/prepDE.py3 -i .  -v  #最佳版本
 
 ```
 
@@ -596,7 +597,7 @@ ggsave("PCA_plot.png", plot = pca_plot, width = 6, height = 5, dpi = 300)
 sum(is.na(scaled_data)) #去除na和全是0的
  scaled_data[is.na(scaled_data)] <- 0
 scaled_data[is.infinite(scaled_data)] <- 0
-> nonzero_rows <- rowSums(count_data) > 0
+nonzero_rows <- rowSums(count_data) > 0
 filtered_data <- scaled_data[nonzero_rows, ]
 sum(is.infinite(scaled_data))
  log_data <- log2(count_data + 1)
@@ -631,6 +632,28 @@ pheatmap(
   height = 14
 )
 
+**将outcome和geo进行分组进行差异分析**
+```
+ library(DESeq2)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(ggplot2)
+library(pheatmap)
+count_data <- read.csv("/mnt/alamo01/users/chenyun730/program/test/results/merged_count_matrix.csv", row.names = 1)
+ condition <- factor(c(rep("outcome", 6), rep("geo", 6)))
+ coldata <- data.frame(condition)
+rownames(coldata) <- colnames(count_data)
+ stopifnot(identical(rownames(coldata), colnames(count_data)))
+ dds <- DESeqDataSetFromMatrix(countData = count_data,
+                              colData = coldata,
+                              design = ~ condition)
+ dds <- dds[rowSums(counts(dds)) > 10, ]
+ dds <- DESeq(dds)
+ res <- results(dds, contrast = c("condition", "geo", "outcome"))
+ res <- res[order(res$padj), ]
+ write.csv(as.data.frame(res), file = "DESeq2_diff_expr_results.csv")
+```
+
 
 
 **思考题**：
@@ -646,10 +669,133 @@ pheatmap(
 
 **任务**：
 
-DESeq2筛选差异表达基因
+DESeq2筛选差异表达基因(outcome与geo）
+```
+# outcome_matrix
+count_data <- read.csv("/mnt/alamo01/users/chenyun730/program/test/my_matrix/symbol_count_matrix.csv",row.names = 1)
+ condition <- factor(c(rep("mock", 3), rep("sars2", 3)))
+count_data[is.na(count_data)] <- 0
+ coldata <- data.frame(condition)
+rownames(coldata) <- colnames(count_data)
+ stopifnot(identical(rownames(coldata), colnames(count_data)))
+ dds <- DESeqDataSetFromMatrix(countData = count_data,
+                              colData = coldata,
+                              design = ~ condition)
+ dds <- dds[rowSums(counts(dds)) > 10, ]
+ dds <- DESeq(dds)
+ res <- results(dds, contrast = c("condition","mock","sars2"))
+ res <- res[order(res$padj), ]
+ write.csv(as.data.frame(res), file = "/mnt/alamo01/users/chenyun730/program/test/my_matrix/outcome_DESeq2_diff_expr_results.csv")
 
-clusterProfiler进行GO/KEGG富集分析
+# geo_matrix
+count_data <- read.csv("/mnt/alamo01/users/chenyun730/program/test/geo_matrix/count_matrix_geo.csv",row.names = 1)
+ condition <- factor(c(rep("mock", 3), rep("sars2", 3)))
+count_data[is.na(count_data)] <- 0
+ coldata <- data.frame(condition)
+rownames(coldata) <- colnames(count_data)
+ stopifnot(identical(rownames(coldata), colnames(count_data)))
+ dds <- DESeqDataSetFromMatrix(countData = count_data,
+                              colData = coldata,
+                              design = ~ condition)
+ dds <- dds[rowSums(counts(dds)) > 10, ]
+ dds <- DESeq(dds)
+ res <- results(dds, contrast = c("condition","mock","sars2"))
+ res <- res[order(res$padj), ]
+ write.csv(as.data.frame(res), file = "/mnt/alamo01/users/chenyun730/program/test/geo_matrix/geo_DESeq2_diff_expr_results.csv")
 
+```
+**clusterProfiler进行GO/KEGG富集分析**
+
+```
+library(clusterProfiler)
+library(org.Hs.eg.db) 
+library(enrichplot)
+library(DOSE)
+
+# 筛选显著差异基因
+deg <- as.data.frame(res)
+deg <- na.omit(deg)
+deg_filtered <- deg[deg$padj < 0.05 & abs(deg$log2FoldChange) > 1, ]
+
+# 提取 gene symbol 或 ENSEMBL id
+gene_symbols <- rownames(deg_filtered)
+# symbol或 "ENSEMBL"，根据gene ID 类型 转 Entrez ID
+gene_entrez <- bitr(gene_symbols,
+                    fromType = "SYMBOL", 
+                    toType = "ENTREZID",
+                    OrgDb = org.Hs.eg.db)
+
+# 提取 ENTREZID 向量
+entrez_ids <- gene_entrez$ENTREZID
+ego <- enrichGO(gene         = entrez_ids,
+                OrgDb        = org.Hs.eg.db,
+                keyType      = "ENTREZID",
+                ont          = "ALL",       # BP/CC/MF/ALL
+                pAdjustMethod = "BH",
+                pvalueCutoff = 0.05,
+                qvalueCutoff = 0.2)
+
+# 保存结果
+write.csv(as.data.frame(ego), file = "GO_enrichment_results.csv")
+
+# 可视化（柱状图 / 点图）
+png("GO_barplot_geo.png", width = 800, height = 600)
+barplot(ego, showCategory = 20, title = "GO Enrichment_geo")
+dev.off()
+png("GO_dotplot_geo.png", width = 800, height = 600)
+dotplot(ego, showCategory = 20, title = "GO Enrichment_geo")
+dev.off()
+```
+**GSEA**
+```
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(DOSE)  # 如果分析 KEGG 可以用到
+library(tibble)
+library(enrichplot)
+# 已运行DEseq2得到res
+# 去掉 NA
+res <- na.omit(res)
+
+# 提取 SYMBOL 和 log2FoldChange，转为 Entrez ID
+res$symbol <- rownames(res)
+gene_info <- bitr(res$symbol,
+                  fromType = "SYMBOL",
+                  toType = "ENTREZID",
+                  OrgDb = org.Hs.eg.db)
+
+# 合并
+res_merged <- merge(res, gene_info, by.x = "symbol", by.y = "SYMBOL")
+
+# 构造排序向量：ENTREZID 为 names，log2FC 为值
+gene_list <- res_merged$log2FoldChange
+names(gene_list) <- res_merged$ENTREZID
+
+# 按 log2FC 降序排序（非常重要！）
+gene_list <- sort(gene_list, decreasing = TRUE)
+
+# 运行 GSEA（以 GO 为例）
+ego_gsea <- gseGO(geneList = gene_list,
+                  OrgDb = org.Hs.eg.db,
+                  ont = "BP",
+                  keyType = "ENTREZID",
+                  nPerm = 1000,
+                  minGSSize = 10,
+                  maxGSSize = 500,
+                  pvalueCutoff = 0.05,
+                  verbose = TRUE)
+
+# 保存富集图
+png("GSEA_dotplot.png", width = 1000, height = 800)
+dotplot(ego_gsea, showCategory = 20, title = "GSEA-GO BP")
+dev.off()
+
+# 也可以画 GSEA 单条路径图（比如 top1）
+png("GSEA_pathway1.png", width = 1000, height = 600)
+gseaplot2(ego_gsea, geneSetID = ego_gsea$ID[1], title = ego_gsea$Description[1])
+dev.off()
+
+```
 输出：差异表达结果、富集结果
 
 思考题：
