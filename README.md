@@ -631,7 +631,7 @@ pheatmap(
   width = 10,
   height = 14
 )
-
+```
 **将outcome和geo进行分组进行差异分析**
 ```
  library(DESeq2)
@@ -653,8 +653,6 @@ rownames(coldata) <- colnames(count_data)
  res <- res[order(res$padj), ]
  write.csv(as.data.frame(res), file = "DESeq2_diff_expr_results.csv")
 ```
-
-
 
 **思考题**：
 
