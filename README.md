@@ -551,16 +551,16 @@ write.csv(count_matrix_geo,
 ```
  构建合并矩阵（merged_counts)
 ```
->df1 <- read.csv("/mnt/alamo01/users/chenyun730/program/test/my_matrix/symbol_count_matrix.csv", check.names = FALSE)
->df2 <- read.csv("/mnt/alamo01/users/chenyun730/program/test/geo_matrix/symbol_count_matrix_geo.csv", check.names = FALSE)
->colnames(df2)[2:ncol(df2)] <- paste0("geo.", colnames(df2)[2:ncol(df2)])
-> merged_df <- full_join(df1, df2, by = "symbol")
-> merged_df[is.na(merged_df)] <- 0
-> write.csv(merged_df, "/mnt/alamo01/users/chenyun730/program/test/results/merged_count_matrix.csv", row.names = FALSE)
+df1 <- read.csv("/mnt/alamo01/users/chenyun730/program/test/my_matrix/symbol_count_matrix.csv", check.names = FALSE)
+df2 <- read.csv("/mnt/alamo01/users/chenyun730/program/test/geo_matrix/symbol_count_matrix_geo.csv", check.names = FALSE)
+colnames(df2)[2:ncol(df2)] <- paste0("geo.", colnames(df2)[2:ncol(df2)])
+ merged_df <- full_join(df1, df2, by = "symbol")
+ merged_df[is.na(merged_df)] <- 0
+ write.csv(merged_df, "/mnt/alamo01/users/chenyun730/program/test/results/merged_count_matrix.csv", row.names = FALSE)
 ```
 PCA图
 ```
- library(ggplot2)
+library(ggplot2)
 library(pheatmap)
 library(dplyr)
 library(tibble)
@@ -660,8 +660,6 @@ rownames(coldata) <- colnames(count_data)
 
 数据为标准化（这里做了）：log2 转换以及scale.=TRUE；太多零表达或低变异的基因，可能掩盖了真实的组间差异；组间差异太小导致的生物差异不明显等原因。
 
-
-# 🤷‍♀️未完成  
 ### 模块5：差异表达分析与功能富集
 **目标**：差异表达分析与功能富集，理解生物学意义。
 
@@ -799,3 +797,138 @@ dev.off()
 思考题：
 
 为什么要进行多重检验校正？
+
+### 模块六 更换比对方法验证跟geo的差异
+**1. 下载STAR文件并构建参考基因组，比对定量得到count矩阵star_count_matrix.txt**
+```
+#新建一个test_star文件储存该模块的文件
+#download.sh用于下载STAR的GRCh38（2.7.0）及注释文件
+vim download.sh
+#! /bin/bash
+#micromamba activate R441
+wget https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_42/GRCh38.primary_assembly.genome.fa.gz
+gunzip GRCh38.primary_assembly.genome.fa.gz
+wget https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_42/gencode.v42.primary_assembly.annotation.gtf.gz
+gunzip gencode.v42.primary_assembly.annotation.gtf.gz
+
+qsub -cwd -V -l cpu=64:mem=64G -q fast -N homodata_download /mnt/alamo01/users/chenyun730/program/test_star/scripts/download.sh
+
+#star_index.sh用于构建索引
+ micromamba create -n star_env -c bioconda -c conda-forge star=2.7.10a
+ micromamba activate star_env
+ STAR --version
+vim star_index.sh
+#! /bin/bash
+#micromamba activate R441
+module load STAR/2.7.10a
+STAR --runThreadN 8 \
+     --runMode genomeGenerate \
+     --genomeDir star_index \
+     --genomeFastaFiles GRCh38.primary_assembly.genome.fa \
+     --sjdbGTFfile gencode.v42.primary_assembly.annotation.gtf \
+     --sjdbOverhang 100
+
+ qsub -cwd -V -l cpu=64:mem=64G -q fast -N star_index /mnt/alamo01/users/chenyun730/program/test_star/scripts/star_index.sh
+
+#进行比对
+vim star_align.sh
+#! /bin/bash
+#micromamba activate R441
+module load STAR/2.7.10a
+INPUT_DIR=/mnt/alamo01/users/chenyun730/program/test_hisat2/clean_data
+OUTPUT_DIR=/mnt/alamo01/users/chenyun730/program/test_star/alignment
+SAMPLES=(SRR27961778 SRR27961779 SRR27961780 SRR27961787 SRR27961788 SRR27961789)
+for SAMPLE in "${SAMPLES[@]}"; do
+    echo "Processing sample: ${SAMPLE}"
+STAR --runThreadN 8 \
+     --genomeDir /mnt/alamo01/users/chenyun730/program/test_star/homodata/star_index \
+     --readFilesIn ${INPUT_DIR}/${SAMPLE}_cleaned_1.fp.gz ${INPUT_DIR}/${SAMPLE}_cleaned_2.fp.gz \
+     --readFilesCommand zcat \
+     --outFileNamePrefix ${OUTPUT_DIR}/${SAMPLE}/${SAMPLE}_ \
+     --outSAMtype BAM SortedByCoordinate \
+     --quantMode GeneCounts \
+     --twopassMode Basic
+done
+
+# 使用FeatureCount定量
+vim  featurecounts.sh
+#! /bin/bash
+#micromamba activate R441
+module load STAR/2.7.10a
+INPUT_DIR=/mnt/alamo01/users/chenyun730/program/test_hisat2/clean_data
+OUTPUT_DIR=/mnt/alamo01/users/chenyun730/program/test_star/alignment
+SAMPLES=(SRR27961778 SRR27961779 SRR27961780 SRR27961787 SRR27961788 SRR27961789)
+for SAMPLE in "${SAMPLES[@]}"; do
+    echo "Processing sample: ${SAMPLE}"
+STAR --runThreadN 8 \
+     --genomeDir /mnt/alamo01/users/chenyun730/program/test_star/homodata/star_index \
+     --readFilesIn ${INPUT_DIR}/${SAMPLE}_cleaned_1.fp.gz ${INPUT_DIR}/${SAMPLE}_cleaned_2.fp.gz \
+     --readFilesCommand zcat \
+     --outFileNamePrefix ${OUTPUT_DIR}/${SAMPLE}/${SAMPLE}_ \
+     --outSAMtype BAM SortedByCoordinate \
+     --quantMode GeneCounts \
+     --twopassMode Basic
+done
+```
+
+**2.构建合并矩阵star_merged.csv**
+```
+#先读入生成的star_count_matrix.txt转成symbol再以.csv输出为symbol_star_count.csv
+ df<- read.delim("/mnt/alamo01/users/chenyun730/program/test_star/quantification/star_count_matrix.txt", row.names = 1, check.names = FALSE)
+ df$gene_id <- rownames(df)
+rownames(df) <- NULL
+ is_ensembl <- grepl("^ENSG", df$gene_id)
+ ensembl_ids <- as.character(df$gene_id[is_ensembl])
+df$symbol[is_ensembl] <- id_map$SYMBOL[match(df$gene_id[is_ensembl], id_map$ENSEMBL)]
+df$symbol <- df$gene_id
+df$symbol[is_ensembl] <- id_map$SYMBOL[match(df$gene_id[is_ensembl], id_map$ENSEMBL)]
+library(dplyr)
+df_clean <- df %>%
+filter(!is.na(symbol) & symbol != "") %>%
+select(-gene_id) %>%
+group_by(symbol) %>%
+summarise(across(everything(), sum)) %>%
+ungroup() %>%
+relocate(symbol)
+write.csv(df_clean, "/mnt/alamo01/users/chenyun730/program/test_star/my_matrix/symbol_star_count.csv", row.names = FALSE)
+
+# 合并两个symbol矩阵为star_merged.csv
+df1<- read.csv("/mnt/alamo01/users/chenyun730/program/test_star/my_matrix/symbol_star_count.csv",row.names = 1, check.names = FALSE)
+df2<- read.csv("/mnt/alamo01/users/chenyun730/program/test_hisat2/geo_matrix/symbol_count_matrix_geo.csv",row.names = 1, check.names = FALSE)
+merged_df <- full_join(df1, df2, by = "symbol")
+merged_df[is.na(merged_df)] <- 0
+write.csv(merged_df, "/mnt/alamo01/users/chenyun730/program/test_star/results/star_merged.csv", row.names = FALSE)
+```
+PCA
+```
+library(ggplot2)
+library(pheatmap)
+library(dplyr)
+library(tibble)
+library(FactoMineR)
+library(factoextra)
+data <- read.csv("/mnt/alamo01/users/chenyun730/program/test_star/my_matrix/symbol_star_count.csv", check.names = FALSE)
+rownames(data) <- data$symbol
+data <- data[, -1]
+log_data <- log2(data + 1)
+log_data_filtered <- log_data[apply(log_data, 1, function(x) sd(x) > 0), ]
+pca_data <- t(log_data_filtered)
+pca_result <- prcomp(pca_data, scale. = TRUE)
+ group <- rownames(pca_data)
+group = factor(rep(c("mock", "sars2"), each = 3))
+ pca_plot <- fviz_pca_ind(pca_result,
+                         geom.ind = "point",
+                         pointshape = 21,
+                         col.ind = group,
+                         palette = c("#1f77b4", "#d62728", "#2ca02c", "#9467bd"),
+                         addEllipses = TRUE,
+                         legend.title = "Group") +
+  theme_minimal() +
+  ggtitle("PCA of RNA-seq Samples")
+ggsave("PCA_plot.png", plot = pca_plot, width = 6, height = 5, dpi = 300)
+```
+
+
+
+
+
