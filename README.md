@@ -854,21 +854,30 @@ done
 vim  featurecounts.sh
 #! /bin/bash
 #micromamba activate R441
-module load STAR/2.7.10a
-INPUT_DIR=/mnt/alamo01/users/chenyun730/program/test_hisat2/clean_data
-OUTPUT_DIR=/mnt/alamo01/users/chenyun730/program/test_star/alignment
+BAM_DIR=/mnt/alamo01/users/chenyun730/program/test_star/alignment
+GTF_FILE=/mnt/alamo01/users/chenyun730/program/test_star/homodata/gencode.v42.primary_assembly.annotation.gtf
+OUTPUT_DIR=/mnt/alamo01/users/chenyun730/program/test_star/quantification
+COUNT_FILE=${OUTPUT_DIR}/gene_counts.txt
+SUMMARY_FILE=${OUTPUT_DIR}/summary.txt
 SAMPLES=(SRR27961778 SRR27961779 SRR27961780 SRR27961787 SRR27961788 SRR27961789)
+BAM_FILES=()
 for SAMPLE in "${SAMPLES[@]}"; do
-    echo "Processing sample: ${SAMPLE}"
-STAR --runThreadN 8 \
-     --genomeDir /mnt/alamo01/users/chenyun730/program/test_star/homodata/star_index \
-     --readFilesIn ${INPUT_DIR}/${SAMPLE}_cleaned_1.fp.gz ${INPUT_DIR}/${SAMPLE}_cleaned_2.fp.gz \
-     --readFilesCommand zcat \
-     --outFileNamePrefix ${OUTPUT_DIR}/${SAMPLE}/${SAMPLE}_ \
-     --outSAMtype BAM SortedByCoordinate \
-     --quantMode GeneCounts \
-     --twopassMode Basic
+    BAM_FILES+=("${BAM_DIR}/${SAMPLE}/${SAMPLE}_Aligned.sortedByCoord.out.bam")
 done
+featureCounts \
+    -T 8 \
+    -a ${GTF_FILE} \
+    -o ${COUNT_FILE} \
+    -g gene_name \
+    -p \
+     --countReadPairs \
+     -s 1 \
+     --verbose \
+    ${BAM_FILES[@]} > ${SUMMARY_FILE} 2>&1
+cut -f1,7- ${COUNT_FILE} | grep -v '^#' | \
+awk 'BEGIN{OFS="\t"}
+     NR==1 {print "gene_id", "mock_1", "mock_2", "mock_3", "sars2_1", "sars2_2", "sars2_3"; next}
+     {print $0}' > ${OUTPUT_DIR}/star_count_matrix.csv
 ```
 
 **2.构建合并矩阵star_merged.csv**
@@ -928,7 +937,52 @@ group = factor(rep(c("mock", "sars2"), each = 3))
 ggsave("PCA_plot.png", plot = pca_plot, width = 6, height = 5, dpi = 300)
 ```
 
+**用Stingtie也一样处理STAR比对后的bam文件，然后得到stingtie_merged.csv数据**
+```
+#生成.gtf文件
+vim stringtie_star.sh
+#! /bin/bash
+#micromamba activate R441
+SAMPLES=(SRR27961778 SRR27961779 SRR27961780 SRR27961787 SRR27961788 SRR27961789)
+for SAMPLE in "${SAMPLES[@]}"; do
+    echo "Processing sample ${SAMPLE}..."
+     stringtie /mnt/alamo01/users/chenyun730/program/test_star/alignment/${SAMPLE}/${SAMPLE}_Aligned.sortedByCoord.out.bam \
+        -G /mnt/alamo01/users/chenyun730/program/test_star/homodata/gencode.v42.primary_assembly.annotation.gtf \
+        -o ./${SAMPLE}/${SAMPLE}.gtf  \
+         -e \
+         -B \
+         -p 8
+done
+python3 /mnt/alamo01/users/chenyun730/program/test_hisat2/scripts/prepDE.py3 .
 
+#生成合并矩阵
+ df1<- read.csv("symbol_gene_count.csv", check.names = FALSE)  
+ df2<- read.csv("/mnt/alamo01/users/chenyun730/program/test_hisat2/geo_matrix/symbol_count_matrix_geo.csv", check.names = FALSE)
+ merged_df <- full_join(df1, df2, by = "symbol")                                 merged_df[is.na(merged_df)] <- 0
+write.csv(merged_df, "/mnt/alamo01/users/chenyun730/program/test_star/results/stringtie_star_merged.csv", row.names = FALSE)
 
+#PCA
+data<- read.csv("/mnt/alamo01/users/chenyun730/program/test_star/results/stringtie_gene_star.csv",row.names = 1, check.names = FALSE)
+rownames(data) <- data$symbol
+data <- data[, -1]
+log_data <- log2(data + 1)
+log_data_filtered <- log_data[apply(log_data, 1, function(x) sd(x) > 0), ]
+pca_data <- t(log_data_filtered)
+pca_result <- prcomp(pca_data, scale. = TRUE)
+ group <- rownames(pca_data)
+group = factor(rep(c("mock", "sars2", each = 3))
+ pca_plot <- fviz_pca_ind(pca_result,
+                         geom.ind = "point",
+                         pointshape = 21,
+                         col.ind = group,
+                         palette = c("#1f77b4", "#d62728", "#2ca02c", "#9467bd"),
+                         addEllipses = TRUE,
+                         legend.title = "Group") +
+  theme_minimal() +
+  ggtitle("PCA of RNA-seq Samples")
+ggsave("/mnt/alamo01/users/chenyun730/program/test_star/results/PCA_stringtie_star.png", plot = pca_plot, width = 6, height = 5, dpi = 300)
+Error: unexpected symbol in:
+"group = factor(rep(c("mock", "sars2","geo_mock","geo_sars2", each = 3))
+ pca_plot"
 
-
+```
