@@ -986,3 +986,37 @@ Error: unexpected symbol in:
  pca_plot"
 
 ```
+**检查多映射reads比例（SAM/BAM文件中的XS标签），过高（>10%）可能提示同源/重复序列问题**
+```
+$ samtools view -F 4 /mnt/alamo01/users/chenyun730/program/test_hisat2/alignment/SRR27961778/SRR27961778_sorted.bam | awk '{for (i=12; i<=NF; ++i) { if ($i ~ /^NH:i:/) { nh=substr($i,6); if (nh == 1) uniq++; else multi++; } } } END {print "Unique mappings:", uniq; print "Multi-mappings:", multi; print "Percentage multi-mapping:", multi/(uniq+multi)*100}'
+Unique mappings: 1415394
+Multi-mappings:
+Percentage multi-mapping: 0
+(R441) chenyun730@mgt01:/mnt/alamo01/users/chenyun730/program/test_hisat2
+$ samtools view -F 4 /mnt/alamo01/users/chenyun730/program/test_hisat2/alignment/SRR27961779/SRR27961779_sorted.bam | awk '{for (i=12; i<=NF; ++i) { if ($i ~ /^NH:i:/) { nh=substr($i,6); if (nh == 1) uniq++; else multi++; } } } END {print "Unique mappings:", uniq; print "Multi-mappings:", multi; print "Percentage multi-mapping:", multi/(uniq+multi)*100}'
+Unique mappings: 18106826
+Multi-mappings:
+Percentage multi-mapping: 0
+(R441) chenyun730@mgt01:/mnt/alamo01/users/chenyun730/program/test_hisat2
+$ samtools view -F 4 /mnt/alamo01/users/chenyun730/program/test_hisat2/alignment/SRR27961780/SRR27961780_sorted.bam | awk '{for (i=12; i<=NF; ++i) { if ($i ~ /^NH:i:/) { nh=substr($i,6); if (nh == 1) uniq++; else multi++; } } } END {print "Unique mappings:", uniq; print "Multi-mappings:", multi; print "Percentage multi-mapping:", multi/(uniq+multi)*100}'
+Unique mappings: 19704911
+Multi-mappings:
+Percentage multi-mapping: 0
+(R441) chenyun730@mgt01:/mnt/alamo01/users/chenyun730/program/test_hisat2
+$ samtools view -F 4 /mnt/alamo01/users/chenyun730/program/test_hisat2/alignment/SRR27961787/SRR27961787_sorted.bam | awk '{for (i=12; i<=NF; ++i) { if ($i ~ /^NH:i:/) { nh=substr($i,6); if (nh == 1) uniq++; else multi++; } } } END {print "Unique mappings:", uniq; print "Multi-mappings:", multi; print "Percentage multi-mapping:", multi/(uniq+multi)*100}'
+Unique mappings: 18680847
+Multi-mappings:
+Percentage multi-mapping: 0
+(R441) chenyun730@mgt01:/mnt/alamo01/users/chenyun730/program/test_hisat2
+$ samtools view -F 4 /mnt/alamo01/users/chenyun730/program/test_hisat2/alignment/SRR27961788/SRR27961788_sorted.bam | awk '{for (i=12; i<=NF; ++i) { if ($i ~ /^NH:i:/) { nh=substr($i,6); if (nh == 1) uniq++; else multi++; } } } END {print "Unique mappings:", uniq; print "Multi-mappings:", multi; print "Percentage multi-mapping:", multi/(uniq+multi)*100}'
+Unique mappings: 18875024
+Multi-mappings:
+Percentage multi-mapping: 0
+(R441) chenyun730@mgt01:/mnt/alamo01/users/chenyun730/program/test_hisat2
+$ samtools view -F 4 /mnt/alamo01/users/chenyun730/program/test_hisat2/alignment/SRR27961789/SRR27961789_sorted.bam | awk '{for (i=12; i<=NF; ++i) { if ($i ~ /^NH:i:/) { nh=substr($i,6); if (nh == 1) uniq++; else multi++; } } } END {print "Unique mappings:", uniq; print "Multi-mappings:", multi; print "Percentage multi-mapping:", multi/(uniq+multi)*100}'
+Unique mappings: 18252563
+Multi-mappings:
+Percentage multi-mapping: 0
+(R441) chenyun730@mgt01:/mnt/alamo01/users/chenyun730/program/test_hisat2
+$
+```
