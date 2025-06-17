@@ -454,24 +454,38 @@ counts <- read.table("GSE255647_all.counts.tsv.gz",
                      check.names = FALSE)
 head(counts[, 1:6])
 str(counts)
-# 提取目标样本
 selected_samples <- c("SRR27961778", "SRR27961779", "SRR27961780", 
                       "SRR27961787", "SRR27961788", "SRR27961789")
 
 counts_subset <- counts[, selected_samples]
-
-# 重命名为更易懂的格式
 colnames(counts_subset) <- c("Mock-1", "Mock-2", "Mock-3", 
                              "SARS-2-1", "SARS-2-2", "SARS-2-3")
-# 选择目标样本
 target_samples <- c("MOCK_12hpi_rep1", "MOCK_12hpi_rep2", "MOCK_12hpi_rep3",
                     "SARS-2_12hpi_rep1", "SARS-2_12hpi_rep2", "SARS-2_12hpi_rep3")
 
 counts_subset <- counts[, target_samples]
-
-# 重命名列
 colnames(counts_subset) <- c("Mock-1", "Mock-2", "Mock-3",
                              "SARS-2-1", "SARS-2-2", "SARS-2-3")
+counts <- read.table("GSE255647_all.counts.tsv.gz", 
+                     header = TRUE, 
+                     sep = "\t", 
+                     row.names = 1, 
+                     check.names = FALSE)
+head(counts[, 1:6])
+str(counts)
+selected_samples <- c("SRR27961778", "SRR27961779", "SRR27961780", 
+                      "SRR27961787", "SRR27961788", "SRR27961789")
+
+counts_subset <- counts[, selected_samples]
+colnames(counts_subset) <- c("Mock-1", "Mock-2", "Mock-3", 
+                             "SARS-2-1", "SARS-2-2", "SARS-2-3")
+target_samples <- c("MOCK_12hpi_rep1", "MOCK_12hpi_rep2", "MOCK_12hpi_rep3",
+                    "SARS-2_12hpi_rep1", "SARS-2_12hpi_rep2", "SARS-2_12hpi_rep3")
+
+counts_subset <- counts[, target_samples]
+colnames(counts_subset) <- c("Mock-1", "Mock-2", "Mock-3",
+                             "SARS-2-1", "SARS-2-2", "SARS-2-3")
+
 library(DESeq2)
 
 # 构建样本信息
